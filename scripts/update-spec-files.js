@@ -842,10 +842,15 @@ function applySimpleRenames(rules, renames) {
 function generateSemanticRule(deprecation) {
   const { setting, replacement, confFile, toVersion } = deprecation;
   const confName = confFile.replace(".spec", "");
+  // Rule ids follow {conffile}_{setting_name}_{type} (snake_case, globally unique)
+  const ruleId = (name, type) =>
+    `${confName.replace(/\.conf$/, "")}_${name}_${type}`
+      .replace(/[^A-Za-z0-9]+/g, "_")
+      .toLowerCase();
 
   // Generate rule for: old setting without new
   const deprecatedRule = {
-    id: `${setting.replace(/[.<>]/g, "_")}_deprecated`,
+    id: ruleId(setting, "deprecated"),
     trigger: {
       setting_exists: setting,
       without: [replacement],
@@ -866,7 +871,7 @@ function generateSemanticRule(deprecation) {
 
   // Generate rule for: new setting without old (backward compat warning)
   const backwardCompatRule = {
-    id: `${replacement.replace(/[.<>]/g, "_")}_no_fallback`,
+    id: ruleId(replacement, "no_fallback"),
     trigger: {
       setting_exists: replacement,
       without: [setting],
@@ -929,43 +934,39 @@ function insertSemanticRules(rules, deprecations) {
     }
 
     const patterns = rules.rules[confName].deprecations.patterns;
-    const existingIds = new Set(patterns.map((p) => p.id));
+    // Match existing rules by id OR by trigger, across every category in this conf file,
+    // so hand-written rules with different ids are not duplicated
+    const confPatterns = Object.values(rules.rules[confName]).flatMap(
+      (category) => (category && category.patterns) || [],
+    );
+    const existingIds = new Set(confPatterns.map((p) => p.id.toLowerCase()));
+    const existingTriggers = new Set(
+      confPatterns.map((p) => JSON.stringify(p.trigger)),
+    );
 
     for (const dep of depsMap.values()) {
       const { deprecatedRule, backwardCompatRule } = generateSemanticRule(dep);
 
-      // Add deprecated rule if not exists
-      if (!existingIds.has(deprecatedRule.id)) {
-        patterns.push(deprecatedRule);
-        results.added.push({
-          confFile: confName,
-          ruleId: deprecatedRule.id,
-          type: "deprecated",
-        });
-        log.info(`  Added rule: ${deprecatedRule.id}`);
-      } else {
-        results.skipped.push({
-          confFile: confName,
-          ruleId: deprecatedRule.id,
-          reason: "Rule already exists",
-        });
-      }
-
-      // Add backward compat rule if not exists
-      if (!existingIds.has(backwardCompatRule.id)) {
-        patterns.push(backwardCompatRule);
-        results.added.push({
-          confFile: confName,
-          ruleId: backwardCompatRule.id,
-          type: "backward_compat",
-        });
-        log.info(`  Added rule: ${backwardCompatRule.id}`);
-      } else {
-        results.skipped.push({
-          confFile: confName,
-          ruleId: backwardCompatRule.id,
-          reason: "Rule already exists",
-        });
+      for (const [rule, type] of [
+        [deprecatedRule, "deprecated"],
+        [backwardCompatRule, "backward_compat"],
+      ]) {
+        if (
+          existingIds.has(rule.id.toLowerCase()) ||
+          existingTriggers.has(JSON.stringify(rule.trigger))
+        ) {
+          results.skipped.push({
+            confFile: confName,
+            ruleId: rule.id,
+            reason: "Rule already exists",
+          });
+          continue;
+        }
+        patterns.push(rule);
+        existingIds.add(rule.id.toLowerCase());
+        existingTriggers.add(JSON.stringify(rule.trigger));
+        results.added.push({ confFile: confName, ruleId: rule.id, type });
+        log.info(`  Added rule: ${rule.id}`);
       }
     }
   }
