@@ -152,6 +152,8 @@ jobs:
 
       - name: Assign Copilot cloud agent
         if: steps.create_issue.outputs.issue_number && env.HAS_COPILOT_TOKEN == 'true'
+        # Assigning the Copilot cloud agent requires a Copilot Pro/Business/Enterprise license; don't fail the run without one
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
