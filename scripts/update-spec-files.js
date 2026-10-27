@@ -34,7 +34,8 @@ const CONFIG = {
   githubApiBase: "https://api.github.com",
   githubRawBase: "https://raw.githubusercontent.com",
   versionPattern: /^\d+\.\d+$/,
-  tagPattern: /^(\d+)\.(\d+)\.(\d+)$/,
+  // Major.Minor.Maintenance with optional Patch (four-segment format introduced in Splunk 10.6, e.g. 10.6.0.5)
+  tagPattern: /^(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$/,
   retryAttempts: 3,
   retryDelayMs: 1000,
   // Minimum version to consider - older versions are EOL
@@ -79,12 +80,15 @@ const log = {
  */
 function httpsGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
+    const urlObj = new URL(url);
     const defaultHeaders = {
       "User-Agent": "vscode-extension-splunk-spec-updater",
+      ...(process.env.GITHUB_TOKEN && urlObj.hostname === "api.github.com"
+        ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+        : {}),
       ...headers,
     };
 
-    const urlObj = new URL(url);
     const requestOptions = {
       hostname: urlObj.hostname,
       path: urlObj.pathname + urlObj.search,
@@ -240,10 +244,11 @@ function groupTagsByVersion(tags) {
       continue;
     }
 
-    const [, major, minor, patch] = match;
+    const [, major, minor, maintenance, patch = "0"] = match;
     const majorNum = parseInt(major, 10);
     const minorNum = parseInt(minor, 10);
-    const patchNum = parseInt(patch, 10);
+    // Combine Maintenance and Patch into one sortable build number
+    const patchNum = parseInt(maintenance, 10) * 100000 + parseInt(patch, 10);
 
     // Skip EOL versions
     if (!meetsMinVersion(majorNum, minorNum)) {
