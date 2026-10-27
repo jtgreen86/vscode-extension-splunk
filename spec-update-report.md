@@ -1,18 +1,15 @@
 ## Automated Spec File Update
 
-**Run Date:** 2026-09-09T09:10:19.072Z
+**Run Date:** 2026-10-27T18:24:56.392Z
 
 ### Versions Added
 
-- **9.3** (tag: 9.3.2) - 70 files
-- **9.4** (tag: 9.4.3) - 71 files
-- **10.0** (tag: 10.0.2) - 71 files
-- **10.2** (tag: 10.2.3) - 71 files
-- **10.4** (tag: 10.4.2) - 72 files
+- **10.6** (tag: 10.6.0.5) - 72 files
 
 ### Extension Settings Updated
 
-No changes to package.json settings.
+- Added to `splunk.spec.FileVersion` enum: 10.6
+- Default version updated: `10.4` → `10.6`
 
 ### Source
 Files downloaded from [jewnix/splunk-spec-files](https://github.com/jewnix/splunk-spec-files)
