@@ -138,13 +138,13 @@ jobs:
             await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: \`Review spec file changes and update semantic rules for Splunk \${versions}\`,
+              title: `Review spec file changes and update semantic rules for Splunk ${versions}`,
               body: body,
               labels: ['copilot', 'automated', 'semantic-rules'],
               assignees: ['copilot']
             });
 
-            console.log(\`Created Copilot review issue for versions: \${versions}\`);
+            console.log(`Created Copilot review issue for versions: ${versions}`);
 
       - name: Summary
         if: always()
