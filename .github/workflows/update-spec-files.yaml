@@ -26,6 +26,9 @@ permissions:
 jobs:
   update-specs:
     runs-on: ubuntu-latest
+    env:
+      # secrets can't be referenced in step `if:` conditions, so expose presence as an env flag
+      HAS_COPILOT_TOKEN: ${{ secrets.COPILOT_ASSIGN_TOKEN != '' }}
 
     steps:
       - name: Checkout repository
@@ -90,6 +93,7 @@ jobs:
             ${{ steps.analyze.outputs.has_breaking_changes == 'true' && 'breaking-change' || '' }}
 
       - name: Create Copilot review issue
+        id: create_issue
         if: steps.check.outputs.has_updates == 'true' && github.event.inputs.dry_run != 'true'
         uses: actions/github-script@v7
         with:
@@ -135,16 +139,41 @@ jobs:
             \`\`\`
             `;
 
-            await github.rest.issues.create({
+            const issue = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: \`Review spec file changes and update semantic rules for Splunk \${versions}\`,
+              title: `Review spec file changes and update semantic rules for Splunk ${versions}`,
               body: body,
-              labels: ['copilot', 'automated', 'semantic-rules'],
-              assignees: ['copilot']
+              labels: ['copilot', 'automated', 'semantic-rules']
             });
 
-            console.log(\`Created Copilot review issue for versions: \${versions}\`);
+            console.log(`Created issue #${issue.data.number} for versions: ${versions}`);
+            core.setOutput('issue_number', issue.data.number);
+
+      - name: Assign Copilot cloud agent
+        if: steps.create_issue.outputs.issue_number && env.HAS_COPILOT_TOKEN == 'true'
+        # Assigning the Copilot cloud agent requires a Copilot Pro/Business/Enterprise license; don't fail the run without one
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.COPILOT_ASSIGN_TOKEN }}
+          script: |
+            const issueNumber = ${{ steps.create_issue.outputs.issue_number }};
+
+            await github.request('POST /repos/{owner}/{repo}/issues/{issue_number}/assignees', {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              assignees: ['copilot-swe-agent[bot]'],
+              agent_assignment: {
+                target_repo: `${context.repo.owner}/${context.repo.repo}`,
+                base_branch: context.payload.repository.default_branch
+              },
+              headers: {
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            });
+            console.log(`Assigned Copilot cloud agent to issue #${issueNumber}`);
 
       - name: Summary
         if: always()
