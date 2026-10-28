@@ -1417,11 +1417,12 @@ async function main() {
         errors = [error.message];
       }
 
-      // Never keep a partial version: it would be committed, published in the
-      // FileVersion enum, and treated as present so it is never retried
+      // Never keep a partial new version: it would be committed, published in the
+      // FileVersion enum, and treated as present so it is never retried.
+      // A failed --version refresh of an existing version keeps its files.
       log.error(`Incomplete download for version ${version}: ${errors.join(", ")}`);
       results.failed.push({ version, errors });
-      if (!options.dryRun) {
+      if (!options.dryRun && !currentVersions.includes(version)) {
         fs.rmSync(path.join(CONFIG.specFilesDir, version), {
           recursive: true,
           force: true,
