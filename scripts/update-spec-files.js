@@ -1405,15 +1405,28 @@ async function main() {
     };
 
     for (const { version, tag } of missingVersions) {
+      let errors;
       try {
         const { downloaded, failed } = await downloadVersionSpecs(tag, version);
-        results.downloaded.push({ version, tag, fileCount: downloaded });
-        if (failed.length > 0) {
-          results.failed.push({ version, errors: failed });
+        if (downloaded > 0 && failed.length === 0) {
+          results.downloaded.push({ version, tag, fileCount: downloaded });
+          continue;
         }
+        errors = failed.length > 0 ? failed : ["No spec files found"];
       } catch (error) {
-        log.error(`Failed to download version ${version}: ${error.message}`);
-        results.failed.push({ version, errors: [error.message] });
+        errors = [error.message];
+      }
+
+      // Never keep a partial new version: it would be committed, published in the
+      // FileVersion enum, and treated as present so it is never retried.
+      // A failed --version refresh of an existing version keeps its files.
+      log.error(`Incomplete download for version ${version}: ${errors.join(", ")}`);
+      results.failed.push({ version, errors });
+      if (!options.dryRun && !currentVersions.includes(version)) {
+        fs.rmSync(path.join(CONFIG.specFilesDir, version), {
+          recursive: true,
+          force: true,
+        });
       }
     }
 
